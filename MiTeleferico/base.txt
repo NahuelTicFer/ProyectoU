@@ -1,0 +1,250 @@
+-- Crear la base de datos
+CREATE DATABASE IF NOT EXISTS CRM_Teleferico;
+USE CRM_Teleferico;
+
+-- Tabla Roles
+CREATE TABLE Roles (
+    IDRol INT AUTO_INCREMENT PRIMARY KEY,
+    NombreRol VARCHAR(50) NOT NULL UNIQUE,
+    Descripcion VARCHAR(200),
+    CONSTRAINT chk_nombre_rol CHECK (NombreRol <> '')
+);
+
+-- Insertar roles iniciales
+INSERT INTO Roles (NombreRol, Descripcion)
+VALUES ('Administrador', 'Rol con permisos totales'),
+       ('Empleado', 'Rol con permisos limitados');
+
+-- Tabla Usuarios
+CREATE TABLE Usuarios (
+    IDUsuario INT AUTO_INCREMENT PRIMARY KEY,
+    Nombre VARCHAR(50) NOT NULL,
+    ApellidoPaterno VARCHAR(50) NOT NULL,
+    ApellidoMaterno VARCHAR(50) NOT NULL,
+    Correo VARCHAR(100) NOT NULL UNIQUE,
+    Contrasena VARCHAR(200) NOT NULL,  -- Debe almacenar hash, no texto plano
+    IDRol INT NOT NULL,
+    Activo BOOLEAN DEFAULT TRUE,
+    FechaCreacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FechaModificacion DATETIME DEFAULT NULL,
+    FOREIGN KEY (IDRol) REFERENCES Roles(IDRol)
+);
+
+-- Tablas maestras
+CREATE TABLE TipoDocumento (
+    IDTipoDocumento INT AUTO_INCREMENT PRIMARY KEY,
+    NombreTipo VARCHAR(50) NOT NULL,
+    CONSTRAINT chk_nombre_tipo CHECK (NombreTipo <> '')
+);
+
+CREATE TABLE Linea (
+    IDLinea INT AUTO_INCREMENT PRIMARY KEY,
+    NombreLinea VARCHAR(50) NOT NULL,
+    CONSTRAINT chk_nombre_linea CHECK (NombreLinea <> '')
+);
+
+CREATE TABLE Estacion (
+    IDEstacion INT AUTO_INCREMENT PRIMARY KEY,
+    NombreEstacion VARCHAR(50) NOT NULL,
+    IDLinea INT NOT NULL,
+    FOREIGN KEY (IDLinea) REFERENCES Linea(IDLinea),
+    CONSTRAINT chk_nombre_estacion CHECK (NombreEstacion <> '')
+);
+
+CREATE TABLE Categoria (
+    IDCategoria INT AUTO_INCREMENT PRIMARY KEY,
+    NombreCategoria VARCHAR(50) NOT NULL,
+    CONSTRAINT chk_nombre_categoria CHECK (NombreCategoria <> '')
+);
+
+-- Tabla Documentos
+CREATE TABLE Documentos (
+    IDDocumento INT AUTO_INCREMENT PRIMARY KEY,
+    Codigo VARCHAR(50) NOT NULL,
+    Nombre VARCHAR(100) NOT NULL,
+    IDTipoDocumento INT NOT NULL,
+    IDLinea INT NOT NULL,
+    IDEstacion INT NOT NULL,
+    IDCategoria INT NOT NULL,
+    IDUsuario INT NOT NULL,
+    Activo BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (IDTipoDocumento) REFERENCES TipoDocumento(IDTipoDocumento),
+    FOREIGN KEY (IDLinea) REFERENCES Linea(IDLinea),
+    FOREIGN KEY (IDEstacion) REFERENCES Estacion(IDEstacion),
+    FOREIGN KEY (IDCategoria) REFERENCES Categoria(IDCategoria),
+    FOREIGN KEY (IDUsuario) REFERENCES Usuarios(IDUsuario),
+    CONSTRAINT chk_codigo_documento CHECK (Codigo <> '')
+);
+
+-- Tabla VersionesDocumento
+CREATE TABLE VersionesDocumento (
+    IDVersion INT AUTO_INCREMENT PRIMARY KEY,
+    IDDocumento INT NOT NULL,
+    NumeroVersion VARCHAR(20) NOT NULL DEFAULT '1.0',
+    DireccionDelDoc VARCHAR(255) NOT NULL,
+    FechaVersion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    DescripcionCambio TEXT,
+    IDUsuario INT NOT NULL,
+    FOREIGN KEY (IDDocumento) REFERENCES Documentos(IDDocumento),
+    FOREIGN KEY (IDUsuario) REFERENCES Usuarios(IDUsuario)
+);
+
+-- Tabla Notificaciones
+CREATE TABLE Notificaciones (
+    IDNotificacion INT AUTO_INCREMENT PRIMARY KEY,
+    Mensaje TEXT NOT NULL,
+    FechaDeEnvio DATETIME DEFAULT CURRENT_TIMESTAMP,
+    IDReceptor INT NOT NULL,
+    Leida BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (IDReceptor) REFERENCES Usuarios(IDUsuario)
+);
+
+-- Tabla TiposReporte
+CREATE TABLE TiposReporte (
+    IDTipoReporte INT AUTO_INCREMENT PRIMARY KEY,
+    NombreTipo VARCHAR(50) NOT NULL,
+    Descripcion TEXT,
+    CONSTRAINT chk_nombre_tipo_reporte CHECK (NombreTipo <> '')
+);
+
+-- Tabla Reportes
+CREATE TABLE Reportes (
+    IDReporte INT AUTO_INCREMENT PRIMARY KEY,
+    IDTipoReporte INT NOT NULL,
+    FechaGeneracion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    IDUsuario INT NOT NULL,
+    FOREIGN KEY (IDTipoReporte) REFERENCES TiposReporte(IDTipoReporte),
+    FOREIGN KEY (IDUsuario) REFERENCES Usuarios(IDUsuario)
+);
+
+-- Tabla Log de Actividades
+CREATE TABLE LogActividades (
+    IDLog INT AUTO_INCREMENT PRIMARY KEY,
+    IDUsuario INT NOT NULL,
+    IDDocumento INT,
+    Accion VARCHAR(255) NOT NULL,
+    FechaGeneracion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (IDUsuario) REFERENCES Usuarios(IDUsuario),
+    FOREIGN KEY (IDDocumento) REFERENCES Documentos(IDDocumento)
+);
+
+CREATE TABLE SesionesActivas (
+    IDSesion INT AUTO_INCREMENT PRIMARY KEY,
+    IDUsuario INT NOT NULL,
+    FechaInicio DATETIME NOT NULL,
+    FechaUltimaActividad DATETIME NOT NULL,
+    Token VARCHAR(255) NOT NULL,
+    FOREIGN KEY (IDUsuario) REFERENCES Usuarios(IDUsuario)
+);
+
+CREATE TABLE EdicionesDocumento (
+    IDEdicion INT AUTO_INCREMENT PRIMARY KEY,
+    IDDocumento INT NOT NULL,
+    IDUsuario INT NOT NULL,
+    FechaEdicion DATETIME NOT NULL,
+    FOREIGN KEY (IDDocumento) REFERENCES Documentos(IDDocumento),
+    FOREIGN KEY (IDUsuario) REFERENCES Usuarios(IDUsuario)
+);
+
+CREATE TABLE EliminacionesDocumento (
+    IDEliminacion INT AUTO_INCREMENT PRIMARY KEY,
+    IDDocumento INT NOT NULL,
+    IDUsuario INT NOT NULL,
+    FechaEliminacion DATETIME NOT NULL,
+    FOREIGN KEY (IDDocumento) REFERENCES Documentos(IDDocumento),
+    FOREIGN KEY (IDUsuario) REFERENCES Usuarios(IDUsuario)
+);
+
+-- Índices para mejorar rendimiento
+CREATE INDEX idx_documentos_codigo ON Documentos(Codigo);
+CREATE INDEX idx_documentos_usuario ON Documentos(IDUsuario);
+CREATE INDEX idx_versiones_documento_id ON VersionesDocumento(IDDocumento);
+CREATE INDEX idx_notificaciones_receptor ON Notificaciones(IDReceptor);
+CREATE INDEX idx_notificaciones_fecha ON Notificaciones(FechaDeEnvio);
+CREATE INDEX idx_log_actividades_usuario ON LogActividades(IDUsuario);
+CREATE INDEX idx_log_actividades_fecha ON LogActividades(FechaGeneracion);
+
+INSERT INTO Linea (NombreLinea) VALUES
+('LINEA ROJA'),
+('LINEA AMARILLA'),
+('LINEA VERDE'),
+('LINEA AZUL'),
+('LINEA NARANJA'),
+('LINEA MORADA'),
+('LINEA PLATEADA'),
+('LINEA CELESTE'),
+('LINEA BLANCA'),
+('LINEA CAFE'),
+('OFICINAS ADMINISTRATIVAS');
+
+INSERT INTO Estacion (NombreEstacion, IDLinea) VALUES
+('Estacion Central (Taypi Uta)', 1),
+('Estacion Cementerio (Ajayuni)', 1),
+('Estacion 16 de Julio (Jach'a Qhathu)', 1),
+('Estacion Mirador (Qhana Pata)', 2),
+('Estacion Buenos Aires (Quta Uma)', 2),
+('Estacion Sopocachi (Suphu Kachi)', 2),
+('Estacion Libertador (Chuqi Apu)', 2),
+('Estacion Libertador (Chuqi Apu)', 3),
+('Estacion Alto Obrajes (Pata Obrajes)', 3),
+('Estacion Obrajes (Aynacha Obrajes)', 3),
+('Estacion Irpavi (Irpawi)', 3),
+('Estacion 16 de Julio (Jach'a Qhathu)', 4),
+('Estacion Plaza Libertad (Qhana Thaki)', 4),
+('Estacion Plaza La Paz (Suma Qamana)', 4),
+('Estacion UPEA (Yatina Uta)', 4),
+('Estacion Rio Seco (Wana Jawira)', 4),
+('Estacion Central (Taypi Uta)', 5),
+('Estacion Armentia (Riosinho Pampa)', 5),
+('Estacion Periferica (Apachita)', 5),
+('Estacion Villa Roel (Inalmama)', 5),
+('Estacion 6 de Marzo (Jach'a Thaki)', 6),
+('Estacion Faro Murillo (Tiquira)', 6),
+('Estacion Obelisco (Utjawi)', 6),
+('Estacion Mirador (Qhana Pata)', 7),
+('Estacion Faro Murillo (Tiquira)', 7),
+('Estacion 16 de Julio (Jach'a Qhathu', 7),
+('Estacion Libertador (Chuqui Apu)', 8),
+('Estacion Del Poeta (Jalsuri)', 8),
+('Estacion Teatro Al Aire Libre (Layqa Quta)', 8),
+('Estacion Prado (Chukiya Marka)', 8),
+('Estacion Libertador (Chuqui Apu)', 9),
+('Estacion Del Poeta (Jalsuri)', 9),
+('Estacion Triangular (Proceres de la Independencia)', 9),
+('Estacion Busch (Defensores del Chaco)', 9),
+('Estacion Villaroel (Inalmama)', 9),
+('Estacion Busch (Defensores del Chaco)', 10),
+('Estacion Las Villas (Pallqa Thano)', 10),
+('Oficina Central', 11);
+
+INSERT INTO Categoria (NombreCategoria) VALUES
+('Sistemas Complementarios'),
+('Financiero'),
+('Contrato'),
+('Orden de Cambio'),
+('Plano Arquitectonico'),
+('Correspondencia'),
+('Planillas'),
+('Lomos');
+
+INSERT INTO TipoDocumento (NombreTipo) VALUES
+('PDF'),
+('DOCX'),
+('XLSX'),
+('JPG'),
+('PNG'),
+('DWG');
+
+INSERT INTO TiposReporte (NombreTipo, Descripcion) VALUES
+('Reporte de Documentos Activos', 'Lista de todos los documentos activos en el sistema.'),
+('Reporte de Documentos Eliminados', 'Registro de documentos eliminados (borrado lógico).'),
+('Reporte de Usuarios Conectados y Desconectados', 'Historial de conexiones y desconexiones de usuarios.'),
+('Reporte de Usuarios Activos', 'Lista de usuarios con cuentas activas.'),
+('Reporte de Usuarios Inactivos', 'Lista de usuarios con cuentas inactivas.'),
+('Reporte de Acciones', 'Registro de acciones realizadas por los usuarios en el sistema.'),
+('Reporte de Documentos Editados', 'Historial de ediciones realizadas en los documentos.'),
+('Reporte de Documentos por Línea', 'Resumen de documentos agrupados por línea.'),
+('Reporte de Acceso No Autorizado', 'Registro de intentos de acceso no autorizados al sistema.'),
+('Reporte de Cambios en Roles', 'Historial de modificaciones en los roles de los usuarios.'),
+('Reporte de Versiones por Documento', 'Detalles de todas las versiones de cada documento.'),
+('Reporte de Actividad por Usuario', 'Resumen de actividades realizadas por cada usuario.');
