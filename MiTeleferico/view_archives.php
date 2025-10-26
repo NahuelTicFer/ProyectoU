@@ -1,5 +1,5 @@
 <?php
-// view_documents.php - Página para ver documentos con filtros y búsqueda
+// view_documents.php - Página para ver y previsualizar documentos con filtros y búsqueda
 
 // Inicio de sesión y verificación de autenticación
 session_start();
@@ -74,15 +74,14 @@ $sql = "
     SELECT 
         d.IDDocumento, 
         d.Codigo, 
-        d.Nombre, 
+        d.Nombre_Documento, 
         t.NombreTipo AS TipoDocumento, 
         l.NombreLinea AS Linea, 
         e.NombreEstacion AS Estacion, 
         c.NombreCategoria AS Categoria, 
         MIN(v.NumeroVersion) AS Version, 
-        u.Nombre AS SubidoPor, 
         MIN(v.FechaVersion) AS FechaCarga,
-        v.RutaArchivo
+        v.DireccionDelDoc AS RutaArchivo
     FROM 
         Documentos d
     JOIN 
@@ -99,7 +98,7 @@ $sql = "
         Usuarios u ON d.IDUsuario = u.IDUsuario
     " . (count($whereClauses) > 0 ? "WHERE " . implode(" AND ", $whereClauses) : "") . "
     GROUP BY 
-        d.IDDocumento, u.IDUsuario, v.RutaArchivo
+        d.IDDocumento, u.IDUsuario, v.DireccionDelDoc
     ORDER BY 
         FechaCarga DESC
 ";
@@ -112,6 +111,55 @@ try {
     die("Error en la consulta: " . $e->getMessage());
 }
 
+// Obtener detalles del documento seleccionado para previsualización
+$documentoSeleccionado = null;
+if (isset($_GET['idDocumento']) && is_numeric($_GET['idDocumento'])) {
+    $idDocumento = (int)$_GET['idDocumento'];
+    $sqlDetalles = "
+        SELECT 
+            d.IDDocumento, 
+            d.Codigo, 
+            d.Nombre_Documento, 
+            t.NombreTipo AS NombreTipo, 
+            l.NombreLinea AS NombreLinea, 
+            e.NombreEstacion AS NombreEstacion, 
+            c.NombreCategoria AS NombreCategoria, 
+            u.Nombre, 
+            u.ApellidoPaterno, 
+            u.ApellidoMaterno, 
+            u.Correo, 
+            v.NumeroVersion, 
+            v.DireccionDelDoc AS DireccionDelDoc,
+            v.FechaVersion
+        FROM 
+            Documentos d 
+        JOIN 
+            TipoDocumento t ON d.IDTipoDocumento = t.IDTipoDocumento 
+        JOIN 
+            Linea l ON d.IDLinea = l.IDLinea 
+        JOIN 
+            Estacion e ON d.IDEstacion = e.IDEstacion 
+        JOIN 
+            Categoria c ON d.IDCategoria = c.IDCategoria 
+        JOIN 
+            Usuarios u ON d.IDUsuario = u.IDUsuario 
+        JOIN 
+            VersionesDocumento v ON d.IDDocumento = v.IDDocumento 
+        WHERE 
+            d.IDDocumento = :idDocumento AND d.Activo = TRUE
+        ORDER BY 
+            v.NumeroVersion DESC
+        LIMIT 1
+    ";
+    try {
+        $stmtDetalles = $pdo->prepare($sqlDetalles);
+        $stmtDetalles->execute([':idDocumento' => $idDocumento]);
+        $documentoSeleccionado = $stmtDetalles->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        die("Error al obtener detalles del documento: " . $e->getMessage());
+    }
+}
+
 // Cerrar conexión
 $pdo = null;
 ?>
@@ -121,7 +169,7 @@ $pdo = null;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ver Documentos - Sistema de Gestión de Archivos MI TELEFÉRICO</title>
+    <title>Sistema de Gestión de Archivos MI TELEFÉRICO</title>
     <style>
         * {
             margin: 0;
@@ -145,7 +193,7 @@ $pdo = null;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.8); /* Overlay claro para legibilidad */
+            background: rgba(255, 255, 255, 0.8);
             z-index: 1;
         }
 
@@ -159,7 +207,7 @@ $pdo = null;
         }
 
         header {
-            background: linear-gradient(135deg, #001f3f, #00bfff); /* Gradiente navy a azul celeste */
+            background: linear-gradient(135deg, #001f3f, #00bfff);
             color: #fff;
             padding: 15px 20px;
             display: flex;
@@ -303,6 +351,73 @@ $pdo = null;
             background: #e74c3c;
         }
 
+        .document-details {
+            max-width: 800px;
+            margin: 20px auto;
+            text-align: left;
+        }
+
+        .document-details h2 {
+            font-size: 24px;
+            color: #001f3f;
+            margin-bottom: 15px;
+        }
+
+        .document-details p {
+            margin: 10px 0;
+            font-size: 16px;
+            color: #34495e;
+        }
+
+        .document-details strong {
+            color: #001f3f;
+        }
+
+        .preview-container {
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: auto;
+            max-height: 800px;
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #f9f9f9;
+        }
+
+        .preview-container iframe,
+        .preview-container img {
+            width: 100%;
+            height: auto;
+            min-height: 600px;
+            object-fit: contain;
+        }
+
+        .preview-message {
+            text-align: center;
+            color: #ff6b6b;
+            padding: 20px;
+        }
+
+        .full-view-btn {
+            padding: 12px 20px;
+            background: #00bfff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .full-view-btn:hover {
+            background: #0099cc;
+        }
+
         @media (max-width: 768px) {
             header {
                 flex-direction: column;
@@ -352,6 +467,16 @@ $pdo = null;
             main h1 {
                 font-size: 28px;
             }
+
+            .preview-container {
+                max-height: 600px;
+                max-width: 100%;
+            }
+
+            .preview-container iframe,
+            .preview-container img {
+                min-height: 400px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -362,6 +487,20 @@ $pdo = null;
             main h1 {
                 font-size: 24px;
             }
+
+            .document-details p {
+                font-size: 14px;
+            }
+
+            .preview-container {
+                max-height: 400px;
+                max-width: 100%;
+            }
+
+            .preview-container iframe,
+            .preview-container img {
+                min-height: 300px;
+            }
         }
     </style>
 </head>
@@ -371,7 +510,6 @@ $pdo = null;
             <img src="IMG/logo.png" alt="Mi Teleférico Logo" class="logo">
             <nav>
                 <ul class="menu">
-                    <li><a href="view_documents.php">Ver Documentos</a></li>
                 </ul>
                 <form action="logout.php" method="POST">
                     <button type="submit" class="logout-btn">Cerrar Sesión</button>
@@ -379,7 +517,6 @@ $pdo = null;
             </nav>
         </header>
         <main>
-            <h1>Ver Documentos</h1>
             <div class="filtros">
                 <input type="text" name="busqueda" id="busqueda" placeholder="Buscar por nombre..." 
                        value="<?php echo htmlspecialchars($busqueda); ?>">
@@ -423,17 +560,18 @@ $pdo = null;
                         </option>
                     <?php endforeach; ?>
                 </select>
-                <button type="submit" onclick="document.getElementById('filtrosForm').submit();">Filtrar</button>
+                <button type="submit" onclick="submitFilters()">Filtrar</button>
                 <button type="button" class="btn-limpiar" 
                         onclick="window.location.href='view_documents.php?busqueda=&tipoDocumento=0&linea=0&estacion=0&categoria=0'">Limpiar</button>
             </div>
 
             <form id="filtrosForm" method="GET" style="display: none;">
-                <input type="hidden" name="busqueda" value="<?php echo htmlspecialchars($busqueda); ?>">
-                <input type="hidden" name="tipoDocumento" value="<?php echo $tipoDocumento; ?>">
-                <input type="hidden" name="linea" value="<?php echo $linea; ?>">
-                <input type="hidden" name="estacion" value="<?php echo $estacion; ?>">
-                <input type="hidden" name="categoria" value="<?php echo $categoria; ?>">
+                <input type="hidden" name="busqueda" id="formBusqueda">
+                <input type="hidden" name="tipoDocumento" id="formTipoDocumento">
+                <input type="hidden" name="linea" id="formLinea">
+                <input type="hidden" name="estacion" id="formEstacion">
+                <input type="hidden" name="categoria" id="formCategoria">
+                <input type="hidden" name="idDocumento" id="formIdDocumento">
             </form>
 
             <?php if (empty($documentos)): ?>
@@ -449,7 +587,6 @@ $pdo = null;
                             <th>Estación</th>
                             <th>Categoría</th>
                             <th>Versión</th>
-                            <th>Subido por</th>
                             <th>Acción</th>
                         </tr>
                     </thead>
@@ -457,21 +594,53 @@ $pdo = null;
                         <?php foreach ($documentos as $doc): ?>
                             <tr>
                                 <td><?php echo htmlspecialchars($doc['Codigo']); ?></td>
-                                <td><?php echo htmlspecialchars($doc['Nombre']); ?></td>
+                                <td><?php echo htmlspecialchars($doc['Nombre_Documento']); ?></td>
                                 <td><?php echo htmlspecialchars($doc['TipoDocumento']); ?></td>
                                 <td><?php echo htmlspecialchars($doc['Linea']); ?></td>
                                 <td><?php echo htmlspecialchars($doc['Estacion']); ?></td>
                                 <td><?php echo htmlspecialchars($doc['Categoria']); ?></td>
                                 <td><?php echo htmlspecialchars($doc['Version']); ?></td>
-                                <td><?php echo htmlspecialchars($doc['SubidoPor']); ?></td>
                                 <td>
-                                    <a href="view_archivos.php?id=<?php echo htmlspecialchars($doc['IDDocumento']); ?>" 
-                                       style="background: #00bfff; color: #fff; border: none; padding: 5px 10px; border-radius: 5px; text-decoration: none; display: inline-block;">Ver</a>
+                                    <a href="javascript:void(0);" 
+                                       onclick="selectDocument(<?php echo htmlspecialchars($doc['IDDocumento']); ?>)"
+                                       style="background: #00bfff; color: #fff; border: none; padding: 5px 10px; border-radius: 5px; text-decoration: none; display: inline-block;">Previsualizar</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            <?php endif; ?>
+
+            <?php if ($documentoSeleccionado): ?>
+                <div class="document-details">
+                    <h2>Detalles del Documento</h2>
+                    <p><strong>Código:</strong> <?php echo htmlspecialchars($documentoSeleccionado['Codigo']); ?></p>
+                    <p><strong>Nombre:</strong> <?php echo htmlspecialchars($documentoSeleccionado['Nombre_Documento']); ?></p>
+                    <p><strong>Tipo:</strong> <?php echo htmlspecialchars($documentoSeleccionado['NombreTipo']); ?></p>
+                    <p><strong>Línea:</strong> <?php echo htmlspecialchars($documentoSeleccionado['NombreLinea']); ?></p>
+                    <p><strong>Estación:</strong> <?php echo htmlspecialchars($documentoSeleccionado['NombreEstacion']); ?></p>
+                    <p><strong>Categoría:</strong> <?php echo htmlspecialchars($documentoSeleccionado['NombreCategoria']); ?></p>
+                    <p><strong>Versión:</strong> <?php echo htmlspecialchars($documentoSeleccionado['NumeroVersion']); ?></p>
+                    <p><strong>Fecha de subida:</strong> <?php echo date('d/m/Y H:i', strtotime($documentoSeleccionado['FechaVersion'])); ?></p>
+                </div>
+                <div class="preview-container">
+                    <?php
+                    $fileExt = strtolower(pathinfo($documentoSeleccionado['DireccionDelDoc'], PATHINFO_EXTENSION));
+                    $previewUrl = htmlspecialchars($documentoSeleccionado['DireccionDelDoc']);
+                    if (in_array($fileExt, ['pdf'])) {
+                        echo "<iframe src='$previewUrl' frameborder='0'></iframe>";
+                    } elseif (in_array($fileExt, ['jpg', 'png'])) {
+                        echo "<img src='$previewUrl' alt='Vista previa'>";
+                    } elseif (in_array($fileExt, ['xls', 'xlsx', 'doc', 'docx'])) {
+                        echo "<p class='preview-message'>No se puede previsualizar este formato. Use el botón para ver completo.</p>";
+                    } elseif ($fileExt === 'dwg') {
+                        echo "<p class='preview-message'>No se puede previsualizar este formato (DWG).</p>";
+                    } else {
+                        echo "<p class='preview-message'>No se puede previsualizar este formato.</p>";
+                    }
+                    ?>
+                </div>
+                <a href="<?php echo htmlspecialchars($documentoSeleccionado['DireccionDelDoc']); ?>" target="_blank" class="full-view-btn">Ver documento completo</a>
             <?php endif; ?>
         </main>
     </div>
@@ -500,6 +669,23 @@ $pdo = null;
                     }
                 });
             }
+        }
+
+        // Función para enviar filtros y seleccionar documento
+        function selectDocument(idDocumento) {
+            document.getElementById('formIdDocumento').value = idDocumento;
+            submitFilters();
+        }
+
+        // Función para enviar el formulario de filtros
+        function submitFilters() {
+            const form = document.getElementById('filtrosForm');
+            document.getElementById('formBusqueda').value = document.getElementById('busqueda').value;
+            document.getElementById('formTipoDocumento').value = document.getElementById('tipoDocumento').value;
+            document.getElementById('formLinea').value = document.getElementById('linea').value;
+            document.getElementById('formEstacion').value = document.getElementById('estacion').value;
+            document.getElementById('formCategoria').value = document.getElementById('categoria').value;
+            form.submit();
         }
 
         // Actualizar estaciones al cargar la página
